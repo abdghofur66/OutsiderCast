@@ -26,6 +26,7 @@ footer img{width:18px;height:18px}
 #v{position:absolute;left:50%;top:50%;width:100%;height:100%;object-fit:contain;transform-origin:center;transform:translate(-50%,-50%);user-select:none;-webkit-user-drag:none}
 #msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#cbd5e1;font-size:17px;background:#0f172a}
 #msg[hidden]{display:none}
+#diag{position:absolute;left:8px;bottom:8px;font:11px ui-monospace,monospace;color:#94a3b8;background:#0008;padding:3px 6px;border-radius:6px;z-index:3;pointer-events:none}
 #bar{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;transition:opacity .3s;z-index:2}
 #bar.hide{opacity:0;pointer-events:none}
 #bar button{width:auto;margin:0;padding:10px 14px;background:#1e293bdd;border:1px solid #334155;font-weight:400}
@@ -51,6 +52,7 @@ footer img{width:18px;height:18px}
 <div id="watch">
   <video id="v" autoplay playsinline muted></video>
   <div id="msg">Menyambungkan…</div>
+  <div id="diag"></div>
   <div id="bar">
     <button id="zout">−</button><button id="zin">+</button>
     <button id="fs">⛶ Layar penuh</button>
@@ -141,6 +143,20 @@ $('#watch').addEventListener('pointermove', e => {
 });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('#watch').addEventListener(t, e => { pts.delete(e.pointerId); lastDist = 0; }));
 $('#watch').addEventListener('dblclick', () => { z = 1; x = y = 0; apply(); });
+
+// Info diagnosis kecil di pojok kiri bawah (koneksi, codec, resolusi, frame)
+setInterval(async () => {
+  if (!pc) return;
+  let codec = '', fr = 0, w = 0, h = 0, kb = 0;
+  try {
+    const st = await pc.getStats();
+    st.forEach(r => {
+      if (r.type === 'inbound-rtp' && r.kind === 'video') { fr = r.framesDecoded || 0; w = r.frameWidth || 0; h = r.frameHeight || 0; kb = Math.round((r.bytesReceived || 0) / 1024); codec = r.codecId; }
+    });
+    if (codec && st.get(codec)) codec = st.get(codec).mimeType.replace('video/', '');
+  } catch {}
+  $('#diag').textContent = `${pc.connectionState} · ${codec || '-'} · ${w}x${h} · frame ${fr} · ${kb} KB`;
+}, 1000);
 
 let hideT; const wake = () => { $('#bar').classList.remove('hide'); clearTimeout(hideT); hideT = setTimeout(() => $('#bar').classList.add('hide'), 3000); };
 ['pointermove', 'pointerdown', 'keydown'].forEach(t => document.addEventListener(t, wake)); wake();
