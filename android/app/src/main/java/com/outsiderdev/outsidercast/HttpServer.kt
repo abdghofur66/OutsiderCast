@@ -65,19 +65,24 @@ class HttpServer(private val ctx: Context) {
                         """{"live":${Cast.live},"paused":${Cast.paused},"pin":${Cast.pin.isNotEmpty()}}""".toByteArray())
                     path == "/auth" -> if (pinOk(q["pin"])) send(out, 200, "text/plain", "ok".toByteArray())
                                        else send(out, 403, "text/plain", "PIN salah".toByteArray())
-                    path == "/offer" && method == "POST" -> offer(out, String(body, Charsets.UTF_8))
+                    path == "/offer" && method == "POST" -> offer(out, String(body, Charsets.UTF_8), c.inetAddress.hostAddress ?: "")
                     else -> send(out, 404, "text/plain", "Tidak ditemukan".toByteArray())
                 }
             } catch (_: Exception) {}
         }
     }
 
-    private fun offer(out: OutputStream, body: String) {
+    private fun offer(out: OutputStream, body: String, clientIp: String) {
         val j = try { JSONObject(body) } catch (_: Exception) { return send(out, 400, "text/plain", "Bad".toByteArray()) }
         if (!pinOk(j.optString("pin"))) return send(out, 403, "text/plain", "PIN salah".toByteArray())
         val eng = CastService.instance?.engine
         if (!Cast.live || eng == null) return send(out, 503, "text/plain", "Belum berbagi".toByteArray())
-        val ans = eng.answer(j.getString("sdp"), j.optString("name", "Penonton").ifBlank { "Penonton" }.take(40))
+        // Browser menyamarkan IP lokalnya sebagai "xxxx.local" (mDNS) yang tidak bisa dibaca
+        // WebRTC Android. Ganti dengan IP asli penonton yang terlihat dari koneksi HTTP ini.
+        val ip = clientIp.removePrefix("::ffff:")
+        val sdp = if (ip.isEmpty()) j.getString("sdp")
+                  else j.getString("sdp").replace(Regex("[0-9a-fA-F-]{36}\\.local"), ip)
+        val ans = eng.answer(sdp, j.optString("name", "Penonton").ifBlank { "Penonton" }.take(40))
             ?: return send(out, 500, "text/plain", "Gagal".toByteArray())
         send(out, 200, "application/json", JSONObject().put("type", "answer").put("sdp", ans).toString().toByteArray())
     }
