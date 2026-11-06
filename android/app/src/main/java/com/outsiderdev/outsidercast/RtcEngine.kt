@@ -16,6 +16,10 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
     private val helper: SurfaceTextureHelper
     private lateinit var source: VideoSource
     val track: VideoTrack
+    private val sysAudio = SystemAudio { projectionOf(capturer) }
+    private val adm: org.webrtc.audio.JavaAudioDeviceModule
+    private val audioSource: AudioSource
+    val audioTrack: AudioTrack
     private val peers = ConcurrentHashMap<Int, PeerConnection>()
 
     // Layar yang diam tidak menghasilkan frame baru, sehingga penonton yang baru masuk
@@ -88,7 +92,15 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
     init {
         org.webrtc.NetworkMonitor.getInstance().setNetworkChangeDetectorFactory(TetherDetectorFactory())
         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(ctx.applicationContext).createInitializationOptions())
+        // Modul audio: buffer "mikrofon" diganti suara yang diputar di HP
+        adm = org.webrtc.audio.JavaAudioDeviceModule.builder(ctx)
+            .setUseHardwareAcousticEchoCanceler(false)
+            .setUseHardwareNoiseSuppressor(false)
+            .setUseStereoInput(false)
+            .setAudioRecordDataCallback { _, channels, rate, buf -> sysAudio.fill(rate, channels, buf) }
+            .createAudioDeviceModule()
         factory = PeerConnectionFactory.builder()
+            .setAudioDeviceModule(adm)
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, false, false))
             .setVideoDecoderFactory(DefaultVideoDecoderFactory(egl.eglBaseContext))
             .createPeerConnectionFactory()
@@ -101,6 +113,13 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
         val (w, h) = size()
         capturer.startCapture(w, h, Cast.quality.fps)
         track = factory.createVideoTrack("screen", source)
+        // Matikan pengolahan suara untuk mikrofon (peredam gema/bising) agar musik & video tetap jernih
+        val mc = MediaConstraints().apply {
+            listOf("googEchoCancellation", "googAutoGainControl", "googNoiseSuppression", "googHighpassFilter", "googTypingNoiseDetection")
+                .forEach { k -> mandatory.add(MediaConstraints.KeyValuePair(k, "false")) }
+        }
+        audioSource = factory.createAudioSource(mc)
+        audioTrack = factory.createAudioTrack("sound", audioSource)
         tick.postDelayed(repeatTask, 300)
     }
 
@@ -117,7 +136,12 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
         peers.values.forEach { applyBitrate(it) }
     }
 
-    fun setPaused(p: Boolean) { track.setEnabled(!p) }
+    fun setPaused(p: Boolean) { track.setEnabled(!p); audioTrack.setEnabled(!p) }
+
+    /** MediaProjection milik ScreenCapturerAndroid (field privat) untuk dipakai perekam suara. */
+    private fun projectionOf(c: ScreenCapturerAndroid): MediaProjection? = try {
+        ScreenCapturerAndroid::class.java.getDeclaredField("mediaProjection").apply { isAccessible = true }.get(c) as? MediaProjection
+    } catch (_: Throwable) { null }
 
     private fun applyBitrate(pc: PeerConnection) {
         val n = maxOf(1, peers.size)
@@ -172,6 +196,11 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
                 it.setCodecPreferences(order)
             } catch (_: Throwable) {}
         }
+        pc.transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO }?.let {
+            it.direction = RtpTransceiver.RtpTransceiverDirection.SEND_ONLY
+            it.sender.setTrack(audioTrack, false)
+            it.sender.setStreams(listOf("cast"))
+        }
         var answer: SessionDescription? = null
         val made = CountDownLatch(1)
         pc.createAnswer(object : SdpAdapter() {
@@ -207,12 +236,16 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
         tick.removeCallbacksAndMessages(null)
         tick.looper.quitSafely()
         synchronized(frameLock) { lastI420?.release(); lastI420 = null }
+        sysAudio.release()
+        try { audioTrack.dispose() } catch (_: Exception) {}
+        try { audioSource.dispose() } catch (_: Exception) {}
         try { capturer.stopCapture() } catch (_: Exception) {}
         try { capturer.dispose() } catch (_: Exception) {}
         try { track.dispose() } catch (_: Exception) {}
         try { source.dispose() } catch (_: Exception) {}
         try { helper.dispose() } catch (_: Exception) {}
         try { factory.dispose() } catch (_: Exception) {}
+        try { adm.release() } catch (_: Exception) {}
         try { egl.release() } catch (_: Exception) {}
     }
 

@@ -16,6 +16,7 @@ object Cast {
 
     @Volatile var live = false
     @Volatile var paused = false
+    @Volatile var audioOn = true
     @Volatile var pin = ""
     @Volatile var quality = Quality.MEDIUM
     @Volatile var port = 0

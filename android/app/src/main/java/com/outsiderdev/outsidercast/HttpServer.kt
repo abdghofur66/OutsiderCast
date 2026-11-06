@@ -97,7 +97,8 @@ class HttpServer(private val ctx: Context) {
         // Mulai langsung di bitrate tinggi (bawaan WebRTC mulai pelan lalu naik bertahap)
         val kbps = Cast.quality.bitrate / 1000
         val tuned = sdp.replace(Regex("(a=fmtp:\\d+ [^\\r\\n]+)")) {
-            it.value + ";x-google-start-bitrate=${kbps * 2 / 3};x-google-min-bitrate=${kbps / 4}"
+            if (it.value.contains("minptime") || it.value.contains("useinbandfec")) it.value + ";stereo=0;maxaveragebitrate=96000"
+            else it.value + ";x-google-start-bitrate=${kbps * 2 / 3};x-google-min-bitrate=${kbps / 4}"
         }
         val ans = eng.answer(tuned, j.optString("name", "Penonton").ifBlank { "Penonton" }.take(40))
             ?: return send(out, 500, "text/plain", "Gagal".toByteArray())

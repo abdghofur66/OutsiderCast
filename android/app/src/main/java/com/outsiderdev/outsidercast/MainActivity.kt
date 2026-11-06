@@ -128,6 +128,13 @@ class MainActivity : Activity() {
         }
         pinRow.addView(save, LinearLayout.LayoutParams(-2, dp(46)).apply { setMargins(dp(8), 0, 0, 0) })
         ctl.addView(pinRow)
+        val snd = CheckBox(this).apply {
+            text = if (Build.VERSION.SDK_INT >= 29) "Kirim suara HP (YouTube, video, musik)" else "Kirim suara (butuh Android 10+)"
+            setTextColor(TXT); isChecked = Cast.audioOn && Build.VERSION.SDK_INT >= 29; isEnabled = Build.VERSION.SDK_INT >= 29
+            buttonTintList = android.content.res.ColorStateList.valueOf(ACC)
+            setOnCheckedChangeListener { _, v -> Cast.audioOn = v }
+        }
+        ctl.addView(snd, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, dp(10), 0, 0) })
         root.addView(ctl)
 
         // Penonton
@@ -156,9 +163,24 @@ class MainActivity : Activity() {
         if (Cast.live) {
             startService(Intent(this, CastService::class.java).setAction(CastService.ACTION_STOP))
             ui.postDelayed({ refresh() }, 300)
-        } else {
-            val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            startActivityForResult(mpm.createScreenCaptureIntent(), REQ)
+        } else if (Cast.audioOn && Build.VERSION.SDK_INT >= 29 &&
+                   checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            // Izin "rekam audio" dibutuhkan Android untuk menangkap suara yang diputar di HP
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 3)
+        } else askProjection()
+    }
+
+    private fun askProjection() {
+        val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        startActivityForResult(mpm.createScreenCaptureIntent(), REQ)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 3) {
+            if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED)
+                Toast.makeText(this, "Tanpa izin audio, hanya gambar yang terkirim", Toast.LENGTH_LONG).show()
+            askProjection()
         }
     }
 
