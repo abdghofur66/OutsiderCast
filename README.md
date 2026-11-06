@@ -11,6 +11,9 @@ Pemateri menjalankan aplikasi di Windows/Mac, lalu penonton cukup scan QR atau b
 - Penonton bisa layar penuh, zoom (tombol/roda mouse/cubit), dan geser
 - WebRTC langsung di jaringan lokal, tanpa server luar
 
+## Android (berbagi layar HP)
+Instal `OutsiderCast-Android-*.apk` dari Release, ketuk **Mulai berbagi**, lalu izinkan rekam layar. Penonton scan QR dari browser, cukup satu Wi-Fi atau tersambung ke hotspot HP itu. Versi Android mengirim gambar MJPEG, jadi bisa dibuka di browser apa pun termasuk iPhone. Suara tidak ikut terkirim. Kode ada di folder `android/`.
+
 ## Menjalankan dari kode
 ```bash
 npm install

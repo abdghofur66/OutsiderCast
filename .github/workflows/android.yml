@@ -1,0 +1,52 @@
+name: Build APK Android
+
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Ambil ikon OutsiderDev
+        run: |
+          mkdir -p app/src/main/res/drawable-nodpi
+          if [ ! -f app/src/main/res/drawable-nodpi/ic_launcher.png ]; then
+            curl -sL https://outsiderdev.com/img/ico.png -o raw.png
+            convert raw.png -resize 432x432 -background none -gravity center -extent 512x512 app/src/main/res/drawable-nodpi/ic_launcher.png
+          fi
+      - run: gradle assembleRelease --no-daemon
+      - run: mv app/build/outputs/apk/release/app-release.apk ../OutsiderCast-Android-1.0.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OutsiderCast-Android
+          path: OutsiderCast-Android-1.0.0.apk
+      - name: Lampirkan ke Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: OutsiderCast-Android-1.0.0.apk
+      - name: Lampirkan ke Release v1.0.0 (build manual)
+        if: github.event_name != 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v1.0.0 ../OutsiderCast-Android-1.0.0.apk --clobber -R ${{ github.repository }} || true
