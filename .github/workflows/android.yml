@@ -34,18 +34,17 @@ jobs:
             cp raw.png app/src/main/res/drawable-nodpi/ic_launcher.png
           fi
       - run: gradle assembleRelease --no-daemon
-      - run: mv app/build/outputs/apk/release/app-release.apk ../OutsiderCast-Android-1.0.0.apk
+      - name: Beri nama sesuai versi
+        run: |
+          V=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "APK=OutsiderCast-Android-$V.apk" >> $GITHUB_ENV
+          mv app/build/outputs/apk/release/app-release.apk ../OutsiderCast-Android-$V.apk
       - uses: actions/upload-artifact@v4
         with:
           name: OutsiderCast-Android
-          path: OutsiderCast-Android-1.0.0.apk
+          path: ${{ env.APK }}
       - name: Lampirkan ke Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: OutsiderCast-Android-1.0.0.apk
-      - name: Lampirkan ke Release v1.0.0 (build manual)
-        if: github.event_name != 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload v1.0.0 ../OutsiderCast-Android-1.0.0.apk --clobber -R ${{ github.repository }} || true
+          files: ${{ env.APK }}
