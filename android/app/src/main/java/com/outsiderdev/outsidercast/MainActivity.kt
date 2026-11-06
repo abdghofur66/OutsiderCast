@@ -90,7 +90,7 @@ class MainActivity : Activity() {
         val ctl = card()
         val row = LinearLayout(this)
         btnStart = button("▶ Mulai berbagi", ACC).apply { setOnClickListener { toggle() } }
-        btnPause = button("⏸ Jeda").apply { isEnabled = false; alpha = .5f; setOnClickListener { Cast.paused = !Cast.paused; refresh() } }
+        btnPause = button("⏸ Jeda").apply { isEnabled = false; alpha = .5f; setOnClickListener { Cast.paused = !Cast.paused; CastService.instance?.applyPause(); refresh() } }
         row.addView(btnStart); row.addView(btnPause)
         ctl.addView(row)
 

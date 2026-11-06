@@ -1,15 +1,17 @@
 package com.outsiderdev.outsidercast
 
 import android.content.Context
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import org.json.JSONObject
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLDecoder
 import kotlin.concurrent.thread
 
-/** Server HTTP mini: halaman penonton + aliran MJPEG. Tanpa library tambahan. */
+/** Server HTTP mini: halaman penonton + signaling WebRTC (POST /offer). Tanpa library tambahan. */
 class HttpServer(private val ctx: Context) {
     private var server: ServerSocket? = null
     @Volatile private var running = false
@@ -28,63 +30,62 @@ class HttpServer(private val ctx: Context) {
         return s.localPort
     }
 
-    fun stop() { running = false; try { server?.close() } catch (_: Exception) {}; Cast.wakeAll() }
+    fun stop() { running = false; try { server?.close() } catch (_: Exception) {} }
+
+    private fun readLine(i: InputStream): String? {
+        val b = ByteArrayOutputStream()
+        while (true) {
+            val c = i.read(); if (c < 0) return if (b.size() == 0) null else b.toString("UTF-8")
+            if (c == '\n'.code) return b.toString("UTF-8").trimEnd('\r')
+            b.write(c); if (b.size() > 8192) return null
+        }
+    }
 
     private fun handle(sock: Socket) {
         sock.use { c ->
             try {
                 c.soTimeout = 15000
-                val rd = BufferedReader(InputStreamReader(c.getInputStream()))
-                val line = rd.readLine() ?: return
-                while (true) { val h = rd.readLine() ?: break; if (h.isEmpty()) break }
-                val target = line.split(" ").getOrNull(1) ?: "/"
+                val inp = BufferedInputStream(c.getInputStream())
+                val line = readLine(inp) ?: return
+                var len = 0
+                while (true) {
+                    val h = readLine(inp) ?: break; if (h.isEmpty()) break
+                    if (h.lowercase().startsWith("content-length:")) len = h.substringAfter(':').trim().toIntOrNull() ?: 0
+                }
+                val body = if (len in 1..200_000) ByteArray(len).also { var r = 0; while (r < len) { val n = inp.read(it, r, len - r); if (n < 0) break; r += n } } else ByteArray(0)
+                val parts = line.split(" ")
+                val method = parts.getOrNull(0) ?: "GET"
+                val target = parts.getOrNull(1) ?: "/"
                 val path = target.substringBefore('?')
                 val q = parseQuery(target.substringAfter('?', ""))
                 val out = c.getOutputStream()
-                when (path) {
-                    "/", "/index.html" -> send(out, 200, "text/html; charset=utf-8",
-                        ctx.assets.open("viewer.html").readBytes())
-                    "/status" -> send(out, 200, "application/json",
+                when {
+                    path == "/" || path == "/index.html" -> send(out, 200, "text/html; charset=utf-8", ctx.assets.open("viewer.html").readBytes())
+                    path == "/status" -> send(out, 200, "application/json",
                         """{"live":${Cast.live},"paused":${Cast.paused},"pin":${Cast.pin.isNotEmpty()}}""".toByteArray())
-                    "/auth" -> if (pinOk(q)) send(out, 200, "text/plain", "ok".toByteArray())
-                               else send(out, 403, "text/plain", "PIN salah".toByteArray())
-                    "/stream" -> if (pinOk(q)) stream(c, out, (q["name"] ?: "Penonton").take(40))
-                                 else send(out, 403, "text/plain", "PIN salah".toByteArray())
+                    path == "/auth" -> if (pinOk(q["pin"])) send(out, 200, "text/plain", "ok".toByteArray())
+                                       else send(out, 403, "text/plain", "PIN salah".toByteArray())
+                    path == "/offer" && method == "POST" -> offer(out, String(body, Charsets.UTF_8))
                     else -> send(out, 404, "text/plain", "Tidak ditemukan".toByteArray())
                 }
             } catch (_: Exception) {}
         }
     }
 
-    private fun pinOk(q: Map<String, String>) = Cast.pin.isEmpty() || q["pin"] == Cast.pin
-
-    private fun stream(c: Socket, out: OutputStream, name: String) {
-        c.soTimeout = 0
-        c.tcpNoDelay = true
-        val id = Cast.addViewer(name)
-        try {
-            out.write(("HTTP/1.1 200 OK\r\nCache-Control: no-cache, no-store\r\nPragma: no-cache\r\nConnection: close\r\n" +
-                "Content-Type: multipart/x-mixed-replace; boundary=ocframe\r\n\r\n").toByteArray())
-            var last = -1L
-            while (running) {
-                last = Cast.waitFrame(last, 2000)
-                val f = Cast.frame
-                if (f == null || Cast.paused || !Cast.live) {
-                    // jaga koneksi tetap hidup agar penonton tidak terputus
-                    if (f != null && !Cast.live) break
-                    continue
-                }
-                out.write("--ocframe\r\nContent-Type: image/jpeg\r\nContent-Length: ${f.size}\r\n\r\n".toByteArray())
-                out.write(f)
-                out.write("\r\n".toByteArray())
-                out.flush()
-            }
-        } catch (_: Exception) {
-        } finally { Cast.viewers.remove(id) }
+    private fun offer(out: OutputStream, body: String) {
+        val j = try { JSONObject(body) } catch (_: Exception) { return send(out, 400, "text/plain", "Bad".toByteArray()) }
+        if (!pinOk(j.optString("pin"))) return send(out, 403, "text/plain", "PIN salah".toByteArray())
+        val eng = CastService.instance?.engine
+        if (!Cast.live || eng == null) return send(out, 503, "text/plain", "Belum berbagi".toByteArray())
+        val ans = eng.answer(j.getString("sdp"), j.optString("name", "Penonton").ifBlank { "Penonton" }.take(40))
+            ?: return send(out, 500, "text/plain", "Gagal".toByteArray())
+        send(out, 200, "application/json", JSONObject().put("type", "answer").put("sdp", ans).toString().toByteArray())
     }
 
+    private fun pinOk(p: String?) = Cast.pin.isEmpty() || p == Cast.pin
+
     private fun send(out: OutputStream, code: Int, type: String, body: ByteArray) {
-        val msg = when (code) { 200 -> "OK"; 403 -> "Forbidden"; else -> "Not Found" }
+        val msg = when (code) { 200 -> "OK"; 400 -> "Bad Request"; 403 -> "Forbidden"; 404 -> "Not Found"; 503 -> "Unavailable"; else -> "Error" }
         out.write("HTTP/1.1 $code $msg\r\nContent-Type: $type\r\nContent-Length: ${body.size}\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n".toByteArray())
         out.write(body); out.flush()
     }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.outsiderdev.outsidercast"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -40,4 +40,5 @@ android {
 
 dependencies {
     implementation("com.google.zxing:core:3.5.3")
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
 }

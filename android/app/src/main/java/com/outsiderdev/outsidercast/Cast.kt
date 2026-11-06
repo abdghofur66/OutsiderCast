@@ -5,12 +5,12 @@ import java.net.NetworkInterface
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-/** Status bersama antara layanan rekam layar, server HTTP, dan tampilan. */
+/** Status bersama antara layanan, server HTTP, dan tampilan. */
 object Cast {
-    enum class Quality(val label: String, val longSide: Int, val jpeg: Int, val fps: Int) {
-        HIGH("Tinggi (teks tajam)", 1280, 80, 15),
-        MEDIUM("Sedang", 960, 65, 10),
-        LOW("Hemat (kelas besar)", 720, 50, 6)
+    enum class Quality(val label: String, val longSide: Int, val fps: Int, val bitrate: Int) {
+        HIGH("Tinggi (1080p, 30 fps)", 1920, 30, 4_000_000),
+        MEDIUM("Sedang (720p, 30 fps)", 1280, 30, 2_000_000),
+        LOW("Hemat (kelas besar)", 960, 15, 800_000)
     }
 
     @Volatile var live = false
@@ -18,19 +18,6 @@ object Cast {
     @Volatile var pin = ""
     @Volatile var quality = Quality.MEDIUM
     @Volatile var port = 0
-
-    // Frame JPEG terbaru
-    private val lock = Object()
-    @Volatile var frame: ByteArray? = null; private set
-    @Volatile var seq = 0L; private set
-
-    fun publish(jpeg: ByteArray) {
-        synchronized(lock) { frame = jpeg; seq++; lock.notifyAll() }
-    }
-    fun waitFrame(after: Long, timeoutMs: Long): Long {
-        synchronized(lock) { if (seq == after) lock.wait(timeoutMs); return seq }
-    }
-    fun wakeAll() { synchronized(lock) { lock.notifyAll() } }
 
     val viewers = ConcurrentHashMap<Int, String>()
     private val ids = AtomicInteger(1)

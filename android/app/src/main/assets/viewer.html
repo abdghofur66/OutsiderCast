@@ -23,7 +23,7 @@ footer a:hover{color:#38bdf8;text-decoration:none}
 footer img{width:18px;height:18px}
 #watch{position:fixed;inset:0;background:#000;display:none;overflow:hidden;touch-action:none}
 #watch.on{display:block}
-#v{position:absolute;left:50%;top:50%;max-width:100%;max-height:100%;transform-origin:center;transform:translate(-50%,-50%);user-select:none;-webkit-user-drag:none}
+#v{position:absolute;left:50%;top:50%;width:100%;height:100%;object-fit:contain;transform-origin:center;transform:translate(-50%,-50%);user-select:none;-webkit-user-drag:none}
 #msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#cbd5e1;font-size:17px;background:#0f172a}
 #msg[hidden]{display:none}
 #bar{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;transition:opacity .3s;z-index:2}
@@ -49,7 +49,7 @@ footer img{width:18px;height:18px}
 </div>
 
 <div id="watch">
-  <img id="v" alt="">
+  <video id="v" autoplay playsinline muted></video>
   <div id="msg">Menyambungkan…</div>
   <div id="bar">
     <button id="zout">−</button><button id="zin">+</button>
@@ -79,16 +79,28 @@ $('#go').onclick = async () => {
   }
   try { localStorage.setItem('oc-name', $('#name').value.trim()); } catch {}
   $('#join').style.display = 'none'; $('#watch').classList.add('on'); watching = true;
-  startStream(); loop();
+  loop();
 };
 $('#name').onkeydown = $('#pin').onkeydown = e => e.key === 'Enter' && $('#go').click();
 
-function startStream() {
-  const q = 'pin=' + encodeURIComponent($('#pin').value.trim()) + '&name=' + encodeURIComponent($('#name').value.trim() || 'Penonton') + '&t=' + Date.now();
-  $('#v').src = '/stream?' + q;
+let pc = null, connecting = false;
+async function startStream() {
+  if (connecting) return; connecting = true;
+  try {
+    if (pc) pc.close();
+    pc = new RTCPeerConnection({ iceServers: [] });
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.ontrack = e => { $('#v').srcObject = e.streams[0] || new MediaStream([e.track]); $('#v').play().catch(() => {}); };
+    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState) && watching) setTimeout(startStream, 2000); };
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise(r => { if (pc.iceGatheringState === 'complete') return r(); pc.onicegatheringstatechange = () => pc.iceGatheringState === 'complete' && r(); setTimeout(r, 2500); });
+    const res = await fetch('/offer', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sdp: pc.localDescription.sdp, pin: $('#pin').value.trim(), name: $('#name').value.trim() || 'Penonton' }) });
+    if (!res.ok) throw new Error(res.status);
+    await pc.setRemoteDescription(await res.json());
+  } catch (e) { if (watching) setTimeout(() => { connecting = false; startStream(); }, 2500); return; }
+  connecting = false;
 }
-$('#v').onload = () => { if (st.live && !st.paused) $('#msg').hidden = true; };
-$('#v').onerror = () => { if (watching) setTimeout(startStream, 2000); };
 
 async function loop() {
   while (watching) {
@@ -98,7 +110,7 @@ async function loop() {
     if (s.lost) { m.hidden = false; m.textContent = 'Koneksi terputus, mencoba menyambung ulang…'; }
     else if (!s.live) { m.hidden = false; m.textContent = 'Menunggu pemateri mulai berbagi layar…'; }
     else if (s.paused) { m.hidden = false; m.textContent = '⏸ Pemateri sedang menjeda layar'; }
-    else { m.hidden = true; if (!was) startStream(); }
+    else { m.hidden = true; if (!was || !pc || pc.connectionState === 'failed') startStream(); }
     await new Promise(r => setTimeout(r, 1500));
   }
 }
