@@ -91,7 +91,7 @@ $('#go').onclick = async () => {
   $('#join').style.display = 'none'; $('#watch').classList.add('on'); watching = true;
   loop();
 };
-$('#name').onkeydown = $('#pin').onkeydown = e => e.key === 'Enter' && $('#go').click();
+$('#name').onkeydown = $('#pin').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
 
 let pc = null, connecting = false, fails = 0, mjpeg = false, ansIps = '', dbg = '';
 fetch('/debug').then(r => r.text()).then(t => dbg = t).catch(() => {});

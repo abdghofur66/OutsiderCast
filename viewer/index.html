@@ -119,7 +119,7 @@ const MSG = {
 function show(k) { $('#msg').hidden = !k; if (k) $('#msg').textContent = MSG[k]; }
 
 $('#go').onclick = () => { $('#err').textContent = ''; connect(); };
-$('#name').onkeydown = $('#pin').onkeydown = e => e.key === 'Enter' && $('#go').click();
+$('#name').onkeydown = $('#pin').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
 $('#leave').onclick = () => location.reload();
 $('#fs').onclick = () => {
   const el = $('#watch');
