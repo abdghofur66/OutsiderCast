@@ -1,0 +1,46 @@
+name: Build OutsiderCast
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Ambil ikon OutsiderDev
+        shell: bash
+        run: |
+          mkdir -p build
+          if [ ! -f build/icon.png ]; then
+            curl -sL https://outsiderdev.com/img/ico.png -o build/ico-src.png
+            npx --yes sharp-cli -i build/ico-src.png -o build/icon.png resize 512 512 --fit contain --background "#00000000"
+          fi
+      - run: npm install
+      - run: npx electron-builder --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OutsiderCast-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+      - name: Lampirkan ke Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.dmg

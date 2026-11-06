@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>OutsiderCast — Tonton layar</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#join{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.box{background:#111c33;border:1px solid #1e293b;border-radius:16px;padding:24px;width:min(380px,100%)}
+h1{margin:0 0 4px;font-size:22px}h1 span{color:#38bdf8}
+p{color:#94a3b8;margin:0 0 16px;font-size:14px}
+label{font-size:13px;color:#cbd5e1;display:block;margin:10px 0 4px}
+input{width:100%;font:inherit;padding:11px 12px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#e2e8f0}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px;padding:12px;background:#0284c7;color:#fff;width:100%;margin-top:16px;font-weight:600}
+#err{color:#fca5a5;font-size:13px;min-height:18px;margin-top:8px}
+footer{text-align:center;padding:14px;font-size:13px}
+footer .dev{color:#94a3b8}
+footer a{color:#e2e8f0;text-decoration:none;display:inline-flex;align-items:center;gap:5px;margin-left:4px}
+footer a:hover{color:#38bdf8;text-decoration:none}
+footer img{width:18px;height:18px}
+#watch{position:fixed;inset:0;background:#000;display:none;overflow:hidden;touch-action:none}
+#watch.on{display:block}
+#v{position:absolute;left:50%;top:50%;width:100%;height:100%;object-fit:contain;transform-origin:center;transform:translate(-50%,-50%)}
+#msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#cbd5e1;font-size:17px;background:#0f172acc}
+#msg[hidden]{display:none}
+#bar{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;transition:opacity .3s}
+#bar.hide{opacity:0;pointer-events:none}
+#bar button{width:auto;margin:0;padding:10px 14px;background:#1e293bdd;border:1px solid #334155;font-weight:400}
+</style>
+</head>
+<body>
+<div id="join">
+  <div class="box">
+    <h1>Outsider<span>Cast</span></h1>
+    <p>Tonton layar yang sedang dibagikan di jaringan ini.</p>
+    <label for="name">Nama</label>
+    <input id="name" maxlength="40" placeholder="Nama Anda">
+    <div id="pinWrap" hidden><label for="pin">PIN ruang</label><input id="pin" inputmode="numeric" maxlength="6" placeholder="PIN dari pemateri"></div>
+    <button id="go">Gabung & tonton</button>
+    <div id="err"></div>
+  </div>
+  <footer>
+    <span class="dev">Developed by</span>
+    <a href="https://outsiderdev.com" target="_blank" rel="noopener"><img src="https://outsiderdev.com/img/ico.png" alt=""> <b>OutsiderDev</b></a>
+  </footer>
+</div>
+
+<div id="watch">
+  <video id="v" autoplay playsinline muted></video>
+  <div id="msg">Menunggu pemateri mulai berbagi layar…</div>
+  <div id="bar">
+    <button id="snd">🔇 Suara</button>
+    <button id="zout">−</button><button id="zin">+</button>
+    <button id="fs">⛶ Layar penuh</button>
+    <button id="leave">Keluar</button>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let ws, pc, myId;
+$('#name').value = localStorage.getItem('oc-name') || '';
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    const name = $('#name').value.trim() || 'Penonton';
+    try { localStorage.setItem('oc-name', name); } catch {}
+    ws.send(JSON.stringify({ type: 'join', name, pin: $('#pin').value.trim() }));
+  };
+  ws.onmessage = async ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'error') { $('#pinWrap').hidden = false; $('#err').textContent = m.message; ws.onclose = null; ws.close(); }
+    else if (m.type === 'joined') { myId = m.id; $('#join').style.display = 'none'; $('#watch').classList.add('on'); show(m.paused ? 'paused' : 'wait'); }
+    else if (m.type === 'signal') handleSignal(m.data);
+    else if (m.type === 'pause') show(m.paused ? 'paused' : (pc ? null : 'wait'));
+    else if (m.type === 'stopped') { closePc(); show('stopped'); }
+    else if (m.type === 'kicked') { ws.onclose = null; closePc(); show('kicked'); }
+  };
+  ws.onclose = () => { if ($('#watch').classList.contains('on')) { show('lost'); setTimeout(connect, 2000); } };
+}
+
+async function handleSignal(d) {
+  if (d.sdp && d.sdp.type === 'offer') {
+    closePc();
+    pc = new RTCPeerConnection({ iceServers: [] });
+    pc.ontrack = e => { $('#v').srcObject = e.streams[0]; show(null); };
+    pc.onicecandidate = e => e.candidate && ws.send(JSON.stringify({ type: 'signal', data: { candidate: e.candidate } }));
+    await pc.setRemoteDescription(d.sdp);
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    ws.send(JSON.stringify({ type: 'signal', data: { sdp: pc.localDescription } }));
+  } else if (d.candidate && pc) { pc.addIceCandidate(d.candidate).catch(() => {}); }
+}
+function closePc() { if (pc) { pc.close(); pc = null; } $('#v').srcObject = null; }
+
+const MSG = {
+  wait: 'Menunggu pemateri mulai berbagi layar…',
+  paused: '⏸ Pemateri sedang menjeda layar',
+  stopped: 'Pemateri berhenti berbagi. Tunggu sebentar…',
+  lost: 'Koneksi terputus, mencoba menyambung ulang…',
+  kicked: 'Anda dikeluarkan dari ruang.'
+};
+function show(k) { $('#msg').hidden = !k; if (k) $('#msg').textContent = MSG[k]; }
+
+$('#go').onclick = () => { $('#err').textContent = ''; connect(); };
+$('#name').onkeydown = $('#pin').onkeydown = e => e.key === 'Enter' && $('#go').click();
+$('#leave').onclick = () => location.reload();
+$('#snd').onclick = () => { const v = $('#v'); v.muted = !v.muted; $('#snd').textContent = v.muted ? '🔇 Suara' : '🔊 Suara'; };
+$('#fs').onclick = () => {
+  const el = $('#watch');
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  else if ($('#v').webkitEnterFullscreen) $('#v').webkitEnterFullscreen(); // iPhone
+};
+
+// Zoom & geser (tombol, roda mouse, cubit, seret)
+let z = 1, x = 0, y = 0;
+const apply = () => { $('#v').style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${z})`; };
+const zoom = f => { z = Math.min(5, Math.max(1, z * f)); if (z === 1) x = y = 0; apply(); };
+$('#zin').onclick = () => zoom(1.25); $('#zout').onclick = () => zoom(0.8);
+$('#watch').addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.1 : 0.9); }, { passive: false });
+const pts = new Map(); let lastDist = 0;
+$('#watch').addEventListener('pointerdown', e => { if (e.target.closest('#bar')) return; pts.set(e.pointerId, e); });
+$('#watch').addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) return;
+  const prev = pts.get(e.pointerId); pts.set(e.pointerId, e);
+  if (pts.size === 2) {
+    const [a, b] = [...pts.values()]; const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    if (lastDist) zoom(d / lastDist); lastDist = d;
+  } else if (z > 1) { x += e.clientX - prev.clientX; y += e.clientY - prev.clientY; apply(); }
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('#watch').addEventListener(t, e => { pts.delete(e.pointerId); lastDist = 0; }));
+$('#watch').addEventListener('dblclick', () => { z = 1; x = y = 0; apply(); });
+
+// Sembunyikan tombol saat diam
+let hideT; const wake = () => { $('#bar').classList.remove('hide'); clearTimeout(hideT); hideT = setTimeout(() => $('#bar').classList.add('hide'), 3000); };
+['pointermove', 'pointerdown', 'keydown'].forEach(t => document.addEventListener(t, wake)); wake();
+</script>
+</body>
+</html>

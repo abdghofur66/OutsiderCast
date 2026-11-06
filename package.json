@@ -1,0 +1,40 @@
+{
+  "name": "outsidercast",
+  "productName": "OutsiderCast",
+  "version": "1.0.0",
+  "description": "Share screen lokal (LAN) untuk presentasi & mengajar — penonton cukup buka browser.",
+  "main": "main.js",
+  "author": "Abdul Ghofur Iswahyudi <abdghofur66@gmail.com> (https://outsiderdev.com)",
+  "license": "MIT",
+  "homepage": "https://outsiderdev.com",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.outsiderdev.outsidercast",
+    "productName": "OutsiderCast",
+    "files": ["main.js", "preload.js", "server.js", "host/**", "viewer/**", "build/icon.png"],
+    "directories": { "buildResources": "build" },
+    "win": { "target": ["nsis", "portable"], "icon": "build/icon.png" },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.education",
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "OutsiderCast membutuhkan izin rekam layar untuk membagikan layar ke penonton."
+      }
+    },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}

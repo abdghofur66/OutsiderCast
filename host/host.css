@@ -1,0 +1,53 @@
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;min-height:100vh}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid #1e293b}
+.brand{font-weight:700;font-size:18px;display:flex;align-items:center;gap:8px}
+.brand small{font-weight:400;color:#94a3b8;font-size:13px}
+.dot{width:10px;height:10px;border-radius:50%;background:#38bdf8;box-shadow:0 0 10px #38bdf8}
+.pill{padding:5px 12px;border-radius:99px;background:#1e293b;font-size:13px;color:#94a3b8}
+.pill.live{background:#14532d;color:#86efac}.pill.paused{background:#713f12;color:#fde68a}
+main{flex:1;display:grid;grid-template-columns:1fr 300px;gap:16px;padding:16px}
+.card{background:#111c33;border:1px solid #1e293b;border-radius:14px;padding:14px}
+.card h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
+.stage{display:flex;flex-direction:column;gap:12px}
+.preview{position:relative;flex:1;min-height:300px;background:#020617;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.preview video{width:100%;height:100%;object-fit:contain}
+.preview.empty video{display:none}
+.preview:not(.empty) #emptyMsg{display:none}
+#emptyMsg{color:#64748b}
+#pausedBadge{position:absolute;inset:auto 0 0 0;background:#713f12e6;color:#fde68a;padding:10px;text-align:center;font-weight:600}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,select,input{font:inherit;border-radius:9px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;padding:8px 14px}
+button{cursor:pointer}button:hover:not(:disabled){background:#273449}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:#0284c7;border-color:#0284c7}button.primary:hover{background:#0369a1}
+button.danger{background:#7f1d1d;border-color:#7f1d1d}
+.chk{display:flex;gap:6px;align-items:center;font-size:14px;color:#cbd5e1}
+aside{display:flex;flex-direction:column;gap:16px}
+.join{text-align:center}
+.join img{width:200px;height:200px;background:#fff;border-radius:10px;padding:6px}
+.join select{width:100%;margin-top:8px;font-size:12px}
+.url{font-family:ui-monospace,monospace;font-size:17px;color:#38bdf8;margin:8px 0;word-break:break-all;user-select:all}
+.hint{font-size:12px;color:#94a3b8;margin:4px 0 10px}
+.pinrow{display:flex;gap:6px}.pinrow input{flex:1;min-width:0}
+.badge{background:#0284c7;border-radius:99px;padding:1px 9px;font-size:12px}
+ul{list-style:none;margin:0;padding:0;max-height:260px;overflow:auto}
+li{display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid #1e293b;font-size:14px}
+li button{padding:3px 9px;font-size:12px}
+.muted{color:#64748b}
+footer{text-align:center;padding:10px;font-size:13px;border-top:1px solid #1e293b}
+footer .dev{color:#94a3b8}
+footer a{color:#e2e8f0;text-decoration:none;display:inline-flex;align-items:center;gap:5px;margin-left:4px}
+footer a:hover{color:#38bdf8;text-decoration:none}
+footer img{width:18px;height:18px}
+.modal{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;z-index:9}
+.modal[hidden]{display:none}
+.sheet{background:#111c33;border:1px solid #334155;border-radius:14px;width:min(860px,94vw);max-height:86vh;display:flex;flex-direction:column;padding:16px}
+.sheethead{display:flex;justify-content:space-between;align-items:center}.sheethead h3{margin:0}
+.tabs{display:flex;gap:6px;margin:12px 0}.tabs .on{background:#0284c7;border-color:#0284c7}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;overflow:auto}
+.src{background:#0f172a;border:2px solid #1e293b;border-radius:10px;padding:8px;cursor:pointer;text-align:left}
+.src:hover{border-color:#38bdf8}
+.src img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:6px}
+.src span{display:block;font-size:12px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:860px){main{grid-template-columns:1fr}}

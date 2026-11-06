@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://outsiderdev.com; connect-src ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'">
+<title>OutsiderCast</title>
+<link rel="stylesheet" href="host.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span> OutsiderCast <small>Share screen lokal</small></div>
+  <div id="status" class="pill">Belum berbagi</div>
+</header>
+
+<main>
+  <section class="card stage">
+    <div id="previewWrap" class="preview empty">
+      <video id="preview" muted autoplay playsinline></video>
+      <div id="emptyMsg">Pilih layar atau jendela yang mau dibagikan</div>
+      <div id="pausedBadge" hidden>⏸ Dijeda — penonton tidak melihat layar</div>
+    </div>
+    <div class="controls">
+      <button id="btnPick" class="primary">🖥️ Pilih layar & mulai</button>
+      <button id="btnPause" disabled>⏸ Jeda</button>
+      <button id="btnStop" class="danger" disabled>⏹ Berhenti</button>
+      <label class="chk" id="audioWrap"><input type="checkbox" id="chkAudio"> Sertakan suara</label>
+      <select id="quality" title="Kualitas">
+        <option value="auto">Kualitas: Otomatis</option>
+        <option value="high">Tinggi (teks tajam)</option>
+        <option value="medium">Sedang</option>
+        <option value="low">Hemat (kelas besar)</option>
+      </select>
+    </div>
+  </section>
+
+  <aside>
+    <section class="card join">
+      <h3>Cara bergabung</h3>
+      <img id="qr" alt="QR">
+      <select id="urlSel"></select>
+      <div class="url" id="url">…</div>
+      <p class="hint">Penonton harus satu Wi-Fi/jaringan. Scan QR atau ketik alamat di browser.</p>
+      <div class="pinrow">
+        <input id="pin" maxlength="6" inputmode="numeric" placeholder="PIN (opsional)">
+        <button id="btnPin">Simpan</button>
+      </div>
+    </section>
+    <section class="card">
+      <h3>Penonton <span id="count" class="badge">0</span></h3>
+      <ul id="viewers"><li class="muted">Belum ada penonton</li></ul>
+    </section>
+  </aside>
+</main>
+
+<footer>
+  <span class="dev">Developed by</span>
+  <a href="https://outsiderdev.com" target="_blank" rel="noopener"><img src="https://outsiderdev.com/img/ico.png" alt=""> <b>OutsiderDev</b></a>
+</footer>
+
+<div id="picker" class="modal" hidden>
+  <div class="sheet">
+    <div class="sheethead"><h3>Pilih yang dibagikan</h3><button id="pickClose">✕</button></div>
+    <div class="tabs"><button data-t="screen" class="on">Layar</button><button data-t="window">Jendela</button></div>
+    <div id="srcGrid" class="grid"></div>
+  </div>
+</div>
+
+<script src="host.js"></script>
+</body>
+</html>
