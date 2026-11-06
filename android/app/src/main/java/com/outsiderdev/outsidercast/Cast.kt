@@ -7,7 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Status bersama antara layanan, server HTTP, dan tampilan. */
 object Cast {
-    enum class Quality(val label: String, val longSide: Int, val fps: Int, val bitrate: Int) {
+    enum class Quality(val label: String, val longSide: Int, val fps: Int, val bitrate: Int, val smooth: Boolean = false) {
+        FAST("Responsif (gerak cepat, 60 fps)", 1280, 60, 5_000_000, true),
         HIGH("Tinggi (1080p, 30 fps)", 1920, 30, 4_000_000),
         MEDIUM("Sedang (720p, 30 fps)", 1280, 30, 2_000_000),
         LOW("Hemat (kelas besar)", 960, 15, 800_000)

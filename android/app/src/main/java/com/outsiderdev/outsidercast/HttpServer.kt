@@ -94,7 +94,12 @@ class HttpServer(private val ctx: Context) {
         val ip = clientIp.removePrefix("::ffff:")
         val sdp = if (ip.isEmpty()) j.getString("sdp")
                   else j.getString("sdp").replace(Regex("[0-9a-fA-F-]{36}\\.local"), ip)
-        val ans = eng.answer(sdp, j.optString("name", "Penonton").ifBlank { "Penonton" }.take(40))
+        // Mulai langsung di bitrate tinggi (bawaan WebRTC mulai pelan lalu naik bertahap)
+        val kbps = Cast.quality.bitrate / 1000
+        val tuned = sdp.replace(Regex("(a=fmtp:\\d+ [^\\r\\n]+)")) {
+            it.value + ";x-google-start-bitrate=${kbps * 2 / 3};x-google-min-bitrate=${kbps / 4}"
+        }
+        val ans = eng.answer(tuned, j.optString("name", "Penonton").ifBlank { "Penonton" }.take(40))
             ?: return send(out, 500, "text/plain", "Gagal".toByteArray())
         send(out, 200, "application/json", JSONObject().put("type", "answer").put("sdp", ans).toString().toByteArray())
     }

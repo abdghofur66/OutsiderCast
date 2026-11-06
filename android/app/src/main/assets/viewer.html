@@ -106,7 +106,10 @@ async function startStream() {
     if (pc) pc.close();
     pc = new RTCPeerConnection({ iceServers: [] });
     pc.addTransceiver('video', { direction: 'recvonly' });
-    pc.ontrack = e => { $('#v').srcObject = e.streams[0] || new MediaStream([e.track]); $('#v').play().catch(() => {}); };
+    pc.ontrack = e => {
+      // Tampilkan frame secepat mungkin (buffer penonton minimal)
+      try { e.receiver.jitterBufferTarget = 0; } catch {}
+      try { e.receiver.playoutDelayHint = 0; } catch {} $('#v').srcObject = e.streams[0] || new MediaStream([e.track]); $('#v').play().catch(() => {}); };
     const me = pc; const guard = setTimeout(() => { if (me === pc && pc.connectionState !== 'connected') failed(); }, 9000);
     pc.onconnectionstatechange = () => { if (me !== pc) return; if (pc.connectionState === 'connected') { clearTimeout(guard); fails = 0; } if (pc.connectionState === 'failed') { clearTimeout(guard); failed(); } };
     await pc.setLocalDescription(await pc.createOffer());

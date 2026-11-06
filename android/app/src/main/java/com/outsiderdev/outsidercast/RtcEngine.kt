@@ -125,8 +125,10 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
         pc.senders.forEach { s ->
             if (s.track()?.kind() != "video") return@forEach
             val p = s.parameters
-            p.encodings.forEach { e -> e.maxBitrateBps = perViewer; e.maxFramerate = Cast.quality.fps }
-            p.degradationPreference = RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION
+            p.encodings.forEach { e -> e.maxBitrateBps = perViewer; e.minBitrateBps = perViewer / 3; e.maxFramerate = Cast.quality.fps }
+            // Mode responsif: jaga kelancaran gerak. Mode lain: jaga ketajaman teks.
+            p.degradationPreference = if (Cast.quality.smooth) RtpParameters.DegradationPreference.MAINTAIN_FRAMERATE
+                                      else RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION
             s.parameters = p
         }
     }
@@ -163,6 +165,12 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
             it.direction = RtpTransceiver.RtpTransceiverDirection.SEND_ONLY
             it.sender.setTrack(track, false)
             it.sender.setStreams(listOf("cast"))
+            // Utamakan H.264 (dikerjakan chip video HP, lebih cepat & dingin), lalu VP8
+            try {
+                val caps = factory.getRtpSenderCapabilities(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO).codecs
+                val order = caps.sortedBy { c -> when (c.name.uppercase()) { "H264" -> 0; "VP8" -> 1; else -> 2 } }
+                it.setCodecPreferences(order)
+            } catch (_: Throwable) {}
         }
         var answer: SessionDescription? = null
         val made = CountDownLatch(1)
