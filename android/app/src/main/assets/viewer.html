@@ -93,9 +93,11 @@ function useMjpeg() {
   if (mjpeg) return; mjpeg = true;
   try { pc && pc.close(); } catch {} pc = null;
   $('#v').hidden = true; const im = $('#vj'); im.hidden = false;
-  const q = 'pin=' + encodeURIComponent($('#pin').value.trim()) + '&name=' + encodeURIComponent($('#name').value.trim() || 'Penonton') + '&t=' + Date.now();
-  im.onerror = () => setTimeout(() => { im.src = '/stream?' + q.replace(/t=\d+/, 't=' + Date.now()); }, 2000);
-  im.src = '/stream?' + q;
+  const pin = encodeURIComponent($('#pin').value.trim());
+  const next = () => { if (watching) im.src = '/frame.jpg?pin=' + pin + '&t=' + Date.now(); };
+  im.onload = () => setTimeout(next, 60);
+  im.onerror = () => setTimeout(next, 400);
+  next();
 }
 function failed() { fails++; if (fails >= 2) useMjpeg(); else if (watching) setTimeout(startStream, 1500); }
 async function startStream() {

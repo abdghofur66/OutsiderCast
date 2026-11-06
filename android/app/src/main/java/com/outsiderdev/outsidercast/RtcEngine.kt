@@ -41,7 +41,7 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
     private var lastJpeg = 0L
     /** Buat JPEG dari frame untuk penonton mode cadangan (maks ~10 fps). */
     private fun maybeJpeg(f: VideoFrame) {
-        if (Cast.mjpegViewers.get() <= 0 || Cast.paused || encoding) return
+        if (!Cast.wantJpeg() || Cast.paused || encoding) return
         val now = System.currentTimeMillis(); if (now - lastJpeg < 100) return
         lastJpeg = now; encoding = true
         val i420 = try { f.buffer.toI420() } catch (_: Exception) { null } ?: run { encoding = false; return }
@@ -72,6 +72,7 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
                     f.buffer.retain()
                     val again = VideoFrame(f.buffer, f.rotation, System.nanoTime())
                     source.capturerObserver.onFrameCaptured(again)
+                    maybeJpeg(again)
                     again.release()
                 }
             }
@@ -80,6 +81,7 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
     }
 
     init {
+        org.webrtc.NetworkMonitor.getInstance().setNetworkChangeDetectorFactory(TetherDetectorFactory())
         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(ctx.applicationContext).createInitializationOptions())
         factory = PeerConnectionFactory.builder()
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, false, false))

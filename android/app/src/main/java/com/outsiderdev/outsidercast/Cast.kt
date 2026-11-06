@@ -21,6 +21,9 @@ object Cast {
 
     // Cadangan MJPEG bila WebRTC gagal tersambung
     val mjpegViewers = AtomicInteger(0)
+    @Volatile var lastPoll = 0L
+    fun mjpegTouch() { lastPoll = System.currentTimeMillis() }
+    fun wantJpeg() = mjpegViewers.get() > 0 || System.currentTimeMillis() - lastPoll < 3000
     private val lock = Object()
     @Volatile var frame: ByteArray? = null; private set
     @Volatile var seq = 0L; private set

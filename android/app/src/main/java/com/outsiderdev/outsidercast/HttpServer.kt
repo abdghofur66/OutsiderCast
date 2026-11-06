@@ -67,6 +67,14 @@ class HttpServer(private val ctx: Context) {
                                        else send(out, 403, "text/plain", "PIN salah".toByteArray())
                     path == "/stream" -> if (pinOk(q["pin"])) stream(c, out, (q["name"] ?: "Penonton").take(40))
                                          else send(out, 403, "text/plain", "PIN salah".toByteArray())
+                    path == "/frame.jpg" -> {
+                        if (!pinOk(q["pin"])) send(out, 403, "text/plain", "PIN salah".toByteArray())
+                        else {
+                            Cast.mjpegTouch()
+                            val f = Cast.frame
+                            if (f == null || Cast.paused) send(out, 204, "image/jpeg", ByteArray(0)) else send(out, 200, "image/jpeg", f)
+                        }
+                    }
                     path == "/debug" -> send(out, 200, "text/plain",
                         ("host: " + Cast.lanAddresses().joinToString { "${it.first}=${it.second}" } + " | kamu: " + c.inetAddress.hostAddress).toByteArray())
                     path == "/offer" && method == "POST" -> offer(out, String(body, Charsets.UTF_8), c.inetAddress.hostAddress ?: "")
@@ -113,7 +121,7 @@ class HttpServer(private val ctx: Context) {
     private fun pinOk(p: String?) = Cast.pin.isEmpty() || p == Cast.pin
 
     private fun send(out: OutputStream, code: Int, type: String, body: ByteArray) {
-        val msg = when (code) { 200 -> "OK"; 400 -> "Bad Request"; 403 -> "Forbidden"; 404 -> "Not Found"; 503 -> "Unavailable"; else -> "Error" }
+        val msg = when (code) { 200 -> "OK"; 204 -> "No Content"; 400 -> "Bad Request"; 403 -> "Forbidden"; 404 -> "Not Found"; 503 -> "Unavailable"; else -> "Error" }
         out.write("HTTP/1.1 $code $msg\r\nContent-Type: $type\r\nContent-Length: ${body.size}\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n".toByteArray())
         out.write(body); out.flush()
     }
