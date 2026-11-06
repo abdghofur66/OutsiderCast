@@ -21,18 +21,23 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
     // Layar yang diam tidak menghasilkan frame baru, sehingga penonton yang baru masuk
     // hanya melihat hitam. Pengulang ini mengirim ulang frame terakhir tiap 300 ms.
     private val frameLock = Any()
-    private var lastFrame: VideoFrame? = null
+    // Salinan CPU (I420) dari frame terakhir. Frame asli (tekstur GPU) TIDAK boleh ditahan,
+    // karena perekam layar baru mengirim frame berikutnya setelah tekstur dilepas
+    // (itu penyebab video membeku setelah beberapa detik).
+    private var lastI420: VideoFrame.I420Buffer? = null
+    private var lastRotation = 0
     private var lastAt = 0L
     private val tick = android.os.Handler(android.os.HandlerThread("oc-repeat").apply { start() }.looper)
     private val repeater = object : CapturerObserver {
         override fun onCapturerStarted(ok: Boolean) { source.capturerObserver.onCapturerStarted(ok) }
         override fun onCapturerStopped() { source.capturerObserver.onCapturerStopped() }
         override fun onFrameCaptured(f: VideoFrame) {
-            synchronized(frameLock) {
-                lastFrame?.release(); f.retain(); lastFrame = f; lastAt = System.nanoTime()
-            }
             source.capturerObserver.onFrameCaptured(f)
-            maybeJpeg(f)
+            val copy = try { f.buffer.toI420() } catch (_: Exception) { null } ?: return
+            synchronized(frameLock) {
+                lastI420?.release(); lastI420 = copy; lastRotation = f.rotation; lastAt = System.nanoTime()
+            }
+            maybeJpeg(copy)
         }
     }
 
@@ -40,11 +45,11 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
     @Volatile private var encoding = false
     private var lastJpeg = 0L
     /** Buat JPEG dari frame untuk penonton mode cadangan (maks ~10 fps). */
-    private fun maybeJpeg(f: VideoFrame) {
+    private fun maybeJpeg(buf: VideoFrame.I420Buffer) {
         if (!Cast.wantJpeg() || Cast.paused || encoding) return
         val now = System.currentTimeMillis(); if (now - lastJpeg < 100) return
         lastJpeg = now; encoding = true
-        val i420 = try { f.buffer.toI420() } catch (_: Exception) { null } ?: run { encoding = false; return }
+        buf.retain(); val i420 = buf
         jpegPool.execute {
             try {
                 val w = i420.width; val h = i420.height
@@ -67,13 +72,13 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
     private val repeatTask = object : Runnable {
         override fun run() {
             synchronized(frameLock) {
-                val f = lastFrame
-                if (f != null && System.nanoTime() - lastAt > 300_000_000L) {
-                    f.buffer.retain()
-                    val again = VideoFrame(f.buffer, f.rotation, System.nanoTime())
+                val b = lastI420
+                if (b != null && System.nanoTime() - lastAt > 300_000_000L) {
+                    b.retain()
+                    val again = VideoFrame(b, lastRotation, System.nanoTime())
                     source.capturerObserver.onFrameCaptured(again)
-                    maybeJpeg(again)
                     again.release()
+                    maybeJpeg(b)
                 }
             }
             tick.postDelayed(this, 300)
@@ -193,7 +198,7 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
         jpegPool.shutdown()
         tick.removeCallbacksAndMessages(null)
         tick.looper.quitSafely()
-        synchronized(frameLock) { lastFrame?.release(); lastFrame = null }
+        synchronized(frameLock) { lastI420?.release(); lastI420 = null }
         try { capturer.stopCapture() } catch (_: Exception) {}
         try { capturer.dispose() } catch (_: Exception) {}
         try { track.dispose() } catch (_: Exception) {}
