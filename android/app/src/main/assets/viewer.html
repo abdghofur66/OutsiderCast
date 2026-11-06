@@ -26,6 +26,7 @@ footer img{width:18px;height:18px}
 #v{position:absolute;left:50%;top:50%;width:100%;height:100%;object-fit:contain;transform-origin:center;transform:translate(-50%,-50%);user-select:none;-webkit-user-drag:none}
 #msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#cbd5e1;font-size:17px;background:#0f172a}
 #msg[hidden]{display:none}
+#vj{position:absolute;left:50%;top:50%;max-width:100%;max-height:100%;transform:translate(-50%,-50%)}
 #diag{position:absolute;left:8px;bottom:8px;font:11px ui-monospace,monospace;color:#94a3b8;background:#0008;padding:3px 6px;border-radius:6px;z-index:3;pointer-events:none}
 #bar{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;transition:opacity .3s;z-index:2}
 #bar.hide{opacity:0;pointer-events:none}
@@ -51,6 +52,7 @@ footer img{width:18px;height:18px}
 
 <div id="watch">
   <video id="v" autoplay playsinline muted></video>
+  <img id="vj" alt="" hidden>
   <div id="msg">Menyambungkan…</div>
   <div id="diag"></div>
   <div id="bar">
@@ -85,21 +87,34 @@ $('#go').onclick = async () => {
 };
 $('#name').onkeydown = $('#pin').onkeydown = e => e.key === 'Enter' && $('#go').click();
 
-let pc = null, connecting = false;
+let pc = null, connecting = false, fails = 0, mjpeg = false, ansIps = '', dbg = '';
+fetch('/debug').then(r => r.text()).then(t => dbg = t).catch(() => {});
+function useMjpeg() {
+  if (mjpeg) return; mjpeg = true;
+  try { pc && pc.close(); } catch {} pc = null;
+  $('#v').hidden = true; const im = $('#vj'); im.hidden = false;
+  const q = 'pin=' + encodeURIComponent($('#pin').value.trim()) + '&name=' + encodeURIComponent($('#name').value.trim() || 'Penonton') + '&t=' + Date.now();
+  im.onerror = () => setTimeout(() => { im.src = '/stream?' + q.replace(/t=\d+/, 't=' + Date.now()); }, 2000);
+  im.src = '/stream?' + q;
+}
+function failed() { fails++; if (fails >= 2) useMjpeg(); else if (watching) setTimeout(startStream, 1500); }
 async function startStream() {
-  if (connecting) return; connecting = true;
+  if (connecting || mjpeg) return; connecting = true;
   try {
     if (pc) pc.close();
     pc = new RTCPeerConnection({ iceServers: [] });
     pc.addTransceiver('video', { direction: 'recvonly' });
     pc.ontrack = e => { $('#v').srcObject = e.streams[0] || new MediaStream([e.track]); $('#v').play().catch(() => {}); };
-    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState) && watching) setTimeout(startStream, 2000); };
+    const me = pc; const guard = setTimeout(() => { if (me === pc && pc.connectionState !== 'connected') failed(); }, 9000);
+    pc.onconnectionstatechange = () => { if (me !== pc) return; if (pc.connectionState === 'connected') { clearTimeout(guard); fails = 0; } if (pc.connectionState === 'failed') { clearTimeout(guard); failed(); } };
     await pc.setLocalDescription(await pc.createOffer());
     await new Promise(r => { if (pc.iceGatheringState === 'complete') return r(); pc.onicegatheringstatechange = () => pc.iceGatheringState === 'complete' && r(); setTimeout(r, 2500); });
     const res = await fetch('/offer', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sdp: pc.localDescription.sdp, pin: $('#pin').value.trim(), name: $('#name').value.trim() || 'Penonton' }) });
     if (!res.ok) throw new Error(res.status);
-    await pc.setRemoteDescription(await res.json());
+    const ans = await res.json();
+    ansIps = [...new Set((ans.sdp.match(/a=candidate:\S+ \d \S+ \d+ (\S+) \d+/g) || []).map(l => l.split(' ')[4]))].join(',');
+    await pc.setRemoteDescription(ans);
   } catch (e) { if (watching) setTimeout(() => { connecting = false; startStream(); }, 2500); return; }
   connecting = false;
 }
@@ -112,7 +127,7 @@ async function loop() {
     if (s.lost) { m.hidden = false; m.textContent = 'Koneksi terputus, mencoba menyambung ulang…'; }
     else if (!s.live) { m.hidden = false; m.textContent = 'Menunggu pemateri mulai berbagi layar…'; }
     else if (s.paused) { m.hidden = false; m.textContent = '⏸ Pemateri sedang menjeda layar'; }
-    else { m.hidden = true; if (!was || !pc || pc.connectionState === 'failed') startStream(); }
+    else { m.hidden = true; if (!mjpeg && (!was || !pc)) startStream(); }
     await new Promise(r => setTimeout(r, 1500));
   }
 }
@@ -127,7 +142,7 @@ $('#fs').onclick = () => {
 
 // Zoom & geser
 let z = 1, x = 0, y = 0;
-const apply = () => { $('#v').style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${z})`; };
+const apply = () => { const t = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${z})`; $('#v').style.transform = t; $('#vj').style.transform = t; };
 const zoom = f => { z = Math.min(5, Math.max(1, z * f)); if (z === 1) x = y = 0; apply(); };
 $('#zin').onclick = () => zoom(1.25); $('#zout').onclick = () => zoom(0.8);
 $('#watch').addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.1 : 0.9); }, { passive: false });
@@ -146,6 +161,7 @@ $('#watch').addEventListener('dblclick', () => { z = 1; x = y = 0; apply(); });
 
 // Info diagnosis kecil di pojok kiri bawah (koneksi, codec, resolusi, frame)
 setInterval(async () => {
+  if (mjpeg) { $('#diag').textContent = 'mode cadangan (MJPEG) · ' + dbg + ' · kandidat HP: ' + (ansIps || '-'); return; }
   if (!pc) return;
   let codec = '', fr = 0, w = 0, h = 0, kb = 0;
   try {
@@ -155,7 +171,7 @@ setInterval(async () => {
     });
     if (codec && st.get(codec)) codec = st.get(codec).mimeType.replace('video/', '');
   } catch {}
-  $('#diag').textContent = `${pc.connectionState} · ${codec || '-'} · ${w}x${h} · frame ${fr} · ${kb} KB`;
+  $('#diag').textContent = `${pc.connectionState} · ${codec || '-'} · ${w}x${h} · frame ${fr} · ${kb} KB · kandidat HP: ${ansIps || '-'} · ${dbg}`;
 }, 1000);
 
 let hideT; const wake = () => { $('#bar').classList.remove('hide'); clearTimeout(hideT); hideT = setTimeout(() => $('#bar').classList.add('hide'), 3000); };

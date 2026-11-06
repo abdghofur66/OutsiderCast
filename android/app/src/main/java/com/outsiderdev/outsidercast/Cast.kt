@@ -19,6 +19,14 @@ object Cast {
     @Volatile var quality = Quality.MEDIUM
     @Volatile var port = 0
 
+    // Cadangan MJPEG bila WebRTC gagal tersambung
+    val mjpegViewers = AtomicInteger(0)
+    private val lock = Object()
+    @Volatile var frame: ByteArray? = null; private set
+    @Volatile var seq = 0L; private set
+    fun publish(jpeg: ByteArray) { synchronized(lock) { frame = jpeg; seq++; lock.notifyAll() } }
+    fun waitFrame(after: Long, ms: Long): Long { synchronized(lock) { if (seq == after) lock.wait(ms); return seq } }
+
     val viewers = ConcurrentHashMap<Int, String>()
     private val ids = AtomicInteger(1)
     fun addViewer(name: String): Int { val id = ids.getAndIncrement(); viewers[id] = name; return id }

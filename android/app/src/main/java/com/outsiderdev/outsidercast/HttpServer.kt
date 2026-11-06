@@ -65,6 +65,10 @@ class HttpServer(private val ctx: Context) {
                         """{"live":${Cast.live},"paused":${Cast.paused},"pin":${Cast.pin.isNotEmpty()}}""".toByteArray())
                     path == "/auth" -> if (pinOk(q["pin"])) send(out, 200, "text/plain", "ok".toByteArray())
                                        else send(out, 403, "text/plain", "PIN salah".toByteArray())
+                    path == "/stream" -> if (pinOk(q["pin"])) stream(c, out, (q["name"] ?: "Penonton").take(40))
+                                         else send(out, 403, "text/plain", "PIN salah".toByteArray())
+                    path == "/debug" -> send(out, 200, "text/plain",
+                        ("host: " + Cast.lanAddresses().joinToString { "${it.first}=${it.second}" } + " | kamu: " + c.inetAddress.hostAddress).toByteArray())
                     path == "/offer" && method == "POST" -> offer(out, String(body, Charsets.UTF_8), c.inetAddress.hostAddress ?: "")
                     else -> send(out, 404, "text/plain", "Tidak ditemukan".toByteArray())
                 }
@@ -85,6 +89,25 @@ class HttpServer(private val ctx: Context) {
         val ans = eng.answer(sdp, j.optString("name", "Penonton").ifBlank { "Penonton" }.take(40))
             ?: return send(out, 500, "text/plain", "Gagal".toByteArray())
         send(out, 200, "application/json", JSONObject().put("type", "answer").put("sdp", ans).toString().toByteArray())
+    }
+
+    private fun stream(c: Socket, out: OutputStream, name: String) {
+        c.soTimeout = 0; c.tcpNoDelay = true
+        val id = Cast.addViewer("$name (cadangan)")
+        Cast.mjpegViewers.incrementAndGet()
+        try {
+            out.write(("HTTP/1.1 200 OK\r\nCache-Control: no-cache, no-store\r\nConnection: close\r\n" +
+                "Content-Type: multipart/x-mixed-replace; boundary=ocframe\r\n\r\n").toByteArray())
+            var last = -1L
+            while (running && Cast.live) {
+                last = Cast.waitFrame(last, 2000)
+                val f = Cast.frame ?: continue
+                if (Cast.paused) continue
+                out.write("--ocframe\r\nContent-Type: image/jpeg\r\nContent-Length: ${f.size}\r\n\r\n".toByteArray())
+                out.write(f); out.write("\r\n".toByteArray()); out.flush()
+            }
+        } catch (_: Exception) {
+        } finally { Cast.viewers.remove(id); Cast.mjpegViewers.decrementAndGet() }
     }
 
     private fun pinOk(p: String?) = Cast.pin.isEmpty() || p == Cast.pin

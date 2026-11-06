@@ -32,6 +32,36 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
                 lastFrame?.release(); f.retain(); lastFrame = f; lastAt = System.nanoTime()
             }
             source.capturerObserver.onFrameCaptured(f)
+            maybeJpeg(f)
+        }
+    }
+
+    private val jpegPool = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var encoding = false
+    private var lastJpeg = 0L
+    /** Buat JPEG dari frame untuk penonton mode cadangan (maks ~10 fps). */
+    private fun maybeJpeg(f: VideoFrame) {
+        if (Cast.mjpegViewers.get() <= 0 || Cast.paused || encoding) return
+        val now = System.currentTimeMillis(); if (now - lastJpeg < 100) return
+        lastJpeg = now; encoding = true
+        val i420 = try { f.buffer.toI420() } catch (_: Exception) { null } ?: run { encoding = false; return }
+        jpegPool.execute {
+            try {
+                val w = i420.width; val h = i420.height
+                val nv21 = ByteArray(w * h * 3 / 2)
+                val y = i420.dataY; val ys = i420.strideY
+                for (r in 0 until h) { y.position(r * ys); y.get(nv21, r * w, w) }
+                val u = i420.dataU; val v = i420.dataV; val us = i420.strideU; val vs = i420.strideV
+                var o = w * h
+                for (r in 0 until h / 2) for (cI in 0 until w / 2) {
+                    nv21[o++] = v.get(r * vs + cI); nv21[o++] = u.get(r * us + cI)
+                }
+                val bos = java.io.ByteArrayOutputStream(150_000)
+                android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, w, h, null)
+                    .compressToJpeg(android.graphics.Rect(0, 0, w, h), 60, bos)
+                Cast.publish(bos.toByteArray())
+            } catch (_: Exception) {
+            } finally { i420.release(); encoding = false }
         }
     }
     private val repeatTask = object : Runnable {
@@ -158,6 +188,7 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
 
     fun release() {
         peers.keys.toList().forEach { id -> Cast.viewers.remove(id); try { peers.remove(id)?.close() } catch (_: Exception) {} }
+        jpegPool.shutdown()
         tick.removeCallbacksAndMessages(null)
         tick.looper.quitSafely()
         synchronized(frameLock) { lastFrame?.release(); lastFrame = null }
