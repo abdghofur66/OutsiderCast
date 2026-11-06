@@ -1,9 +1,13 @@
 name: Build OutsiderCast
 
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag release tujuan (mis. v1.2.0)'
+        required: true
 
 permissions:
   contents: write
@@ -38,9 +42,8 @@ jobs:
             dist/*.exe
             dist/*.dmg
       - name: Lampirkan ke Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.exe
-            dist/*.dmg
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$TAG" dist/*.exe dist/*.dmg --clobber -R ${{ github.repository }} 2>/dev/null || gh release upload "$TAG" $(ls dist/*.exe dist/*.dmg 2>/dev/null) --clobber -R ${{ github.repository }}
