@@ -28,6 +28,10 @@ footer img{width:18px;height:18px}
 #msg[hidden]{display:none}
 #bar{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;transition:opacity .3s}
 #bar.hide{opacity:0;pointer-events:none}
+#bar{flex-wrap:wrap;justify-content:flex-end;left:12px}
+#vol{align-self:center;min-width:44px;text-align:center;font-size:13px;color:#cbd5e1;background:#1e293bdd;border:1px solid #334155;border-radius:10px;padding:10px 6px}
+#diag{position:absolute;left:8px;top:8px;right:8px;font:11px ui-monospace,monospace;color:#94a3b8;background:#0008;padding:3px 6px;border-radius:6px;z-index:3;pointer-events:none}
+#diag.off{display:none}
 #bar button{width:auto;margin:0;padding:10px 14px;background:#1e293bdd;border:1px solid #334155;font-weight:400}
 </style>
 </head>
@@ -49,10 +53,13 @@ footer img{width:18px;height:18px}
 </div>
 
 <div id="watch">
-  <video id="v" autoplay playsinline muted></video>
+  <video id="v" autoplay playsinline></video>
+  <div id="diag" class="off"></div>
   <div id="msg">Menunggu pemateri mulai berbagi layar…</div>
   <div id="bar">
-    <button id="snd">🔇 Suara</button>
+    <button id="mute" title="Bisukan">🔊</button>
+    <button id="vdown" title="Kecilkan suara">🔉−</button><span id="vol">100%</span><button id="vup" title="Besarkan suara">🔊+</button>
+    <button id="info" title="Tampilkan/sembunyikan info koneksi">ⓘ</button>
     <button id="zout">−</button><button id="zin">+</button>
     <button id="fs">⛶ Layar penuh</button>
     <button id="leave">Keluar</button>
@@ -87,7 +94,12 @@ async function handleSignal(d) {
   if (d.sdp && d.sdp.type === 'offer') {
     closePc();
     pc = new RTCPeerConnection({ iceServers: [] });
-    pc.ontrack = e => { $('#v').srcObject = e.streams[0]; show(null); };
+    pc.ontrack = e => {
+      // Tampilkan frame secepat mungkin (buffer penonton minimal)
+      try { e.receiver.jitterBufferTarget = 0; } catch {}
+      try { e.receiver.playoutDelayHint = 0; } catch {}
+      $('#v').srcObject = e.streams[0]; show(null); playWithSound();
+    };
     pc.onicecandidate = e => e.candidate && ws.send(JSON.stringify({ type: 'signal', data: { candidate: e.candidate } }));
     await pc.setRemoteDescription(d.sdp);
     const ans = await pc.createAnswer();
@@ -109,7 +121,6 @@ function show(k) { $('#msg').hidden = !k; if (k) $('#msg').textContent = MSG[k];
 $('#go').onclick = () => { $('#err').textContent = ''; connect(); };
 $('#name').onkeydown = $('#pin').onkeydown = e => e.key === 'Enter' && $('#go').click();
 $('#leave').onclick = () => location.reload();
-$('#snd').onclick = () => { const v = $('#v'); v.muted = !v.muted; $('#snd').textContent = v.muted ? '🔇 Suara' : '🔊 Suara'; };
 $('#fs').onclick = () => {
   const el = $('#watch');
   if (document.fullscreenElement) document.exitFullscreen();
@@ -135,6 +146,51 @@ $('#watch').addEventListener('pointermove', e => {
 });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('#watch').addEventListener(t, e => { pts.delete(e.pointerId); lastDist = 0; }));
 $('#watch').addEventListener('dblclick', () => { z = 1; x = y = 0; apply(); });
+
+// ---------- Suara ----------
+const V = $('#v');
+let vol = 1;
+try { vol = Math.min(1, Math.max(0, parseFloat(localStorage.getItem('oc-vol') ?? '1'))); } catch {}
+function playWithSound() {
+  V.volume = vol;
+  V.play().catch(() => { V.muted = true; V.play().catch(() => {}); showVol(); });
+  showVol();
+}
+function showVol() {
+  $('#vol').textContent = V.muted ? 'Bisu' : Math.round(vol * 100) + '%';
+  $('#mute').textContent = V.muted || vol === 0 ? '🔇' : '🔊';
+}
+function setVol(v) {
+  vol = Math.round(Math.min(1, Math.max(0, v)) * 10) / 10;
+  V.volume = vol; V.muted = vol === 0;
+  try { localStorage.setItem('oc-vol', vol); } catch {}
+  if (!V.muted) V.play().catch(() => {});
+  showVol();
+}
+$('#mute').onclick = () => { V.muted = !V.muted; if (!V.muted && vol === 0) setVol(0.5); if (!V.muted) V.play().catch(() => {}); showVol(); };
+$('#vup').onclick = () => setVol(vol + 0.1);
+$('#vdown').onclick = () => setVol(vol - 0.1);
+showVol();
+
+// ---------- Info koneksi: tampil/sembunyi ----------
+let infoOn = false;
+try { infoOn = localStorage.getItem('oc-info') === '1'; } catch {}
+const applyInfo = () => { $('#diag').classList.toggle('off', !infoOn); $('#info').style.background = infoOn ? '#0284c7' : ''; };
+$('#info').onclick = () => { infoOn = !infoOn; try { localStorage.setItem('oc-info', infoOn ? '1' : '0'); } catch {} applyInfo(); };
+applyInfo();
+setInterval(async () => {
+  if (!pc || !infoOn) return;
+  let codec = '', fr = 0, w = 0, h = 0, kb = 0, akb = 0;
+  try {
+    const st = await pc.getStats();
+    st.forEach(r => {
+      if (r.type === 'inbound-rtp' && r.kind === 'audio') akb = Math.round((r.bytesReceived || 0) / 1024);
+      if (r.type === 'inbound-rtp' && r.kind === 'video') { fr = r.framesDecoded || 0; w = r.frameWidth || 0; h = r.frameHeight || 0; kb = Math.round((r.bytesReceived || 0) / 1024); codec = r.codecId; }
+    });
+    if (codec && st.get(codec)) codec = st.get(codec).mimeType.replace('video/', '');
+  } catch {}
+  $('#diag').textContent = `${pc.connectionState} · ${codec || '-'} · ${w}x${h} · frame ${fr} · ${kb} KB · suara ${akb} KB`;
+}, 1000);
 
 // Sembunyikan tombol saat diam
 let hideT; const wake = () => { $('#bar').classList.remove('hide'); clearTimeout(hideT); hideT = setTimeout(() => $('#bar').classList.add('hide'), 3000); };

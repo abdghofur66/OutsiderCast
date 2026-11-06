@@ -25,8 +25,8 @@ async function boot() {
   session.defaultSession.setDisplayMediaRequestHandler(async (_req, cb) => {
     const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
     const src = sources.find(s => s.id === chosenSourceId) || sources[0];
-    // Audio sistem (loopback) hanya didukung di Windows
-    cb({ video: src, audio: wantAudio && process.platform === 'win32' ? 'loopback' : undefined });
+    // Suara sistem (loopback): Windows, dan Mac dengan macOS 13+ (ScreenCaptureKit)
+    cb({ video: src, audio: wantAudio && ['win32', 'darwin'].includes(process.platform) ? 'loopback' : undefined });
   });
 
   win = new BrowserWindow({

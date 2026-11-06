@@ -12,7 +12,7 @@ async function loadInfo() {
   info.urls.forEach((u, i) => sel.add(new Option(`${u.address} (${u.name})`, i)));
   sel.hidden = info.urls.length < 2;
   showUrl(0, info.qr);
-  if (info.platform !== 'win32') $('#audioWrap').title = 'Suara sistem hanya didukung di Windows';
+  if (info.platform === 'darwin') $('#audioWrap').title = 'Mac: butuh macOS 13 (Ventura) ke atas';
 }
 async function showUrl(i, qr) {
   const u = info.urls[i].url;
@@ -33,7 +33,7 @@ function connect() {
     else if (m.type === 'viewer-leave') closePeer(m.id);
     else if (m.type === 'signal') {
       const pc = peers.get(m.from); if (!pc) return;
-      if (m.data.sdp) await pc.setRemoteDescription(m.data.sdp);
+      if (m.data.sdp) await pc.setRemoteDescription(tuneSdp(m.data.sdp));
       else if (m.data.candidate) await pc.addIceCandidate(m.data.candidate).catch(() => {});
     }
   };
@@ -53,12 +53,27 @@ async function offerTo(id) {
   send({ type: 'signal', to: id, data: { sdp: pc.localDescription } });
   applyQuality();
 }
+// Mulai langsung di bitrate tinggi (bawaan WebRTC mulai pelan lalu naik bertahap),
+// dan naikkan kualitas suara Opus.
+function tuneSdp(d) {
+  const kbps = Math.round(curBitrate() / 1000);
+  const sdp = d.sdp.replace(/(a=fmtp:\d+ [^\r\n]+)/g, (l) =>
+    /minptime|useinbandfec/.test(l) ? l + ';stereo=1;maxaveragebitrate=128000'
+      : l + `;x-google-start-bitrate=${Math.round(kbps * 2 / 3)};x-google-min-bitrate=${Math.round(kbps / 4)}`);
+  return { type: d.type, sdp };
+}
+function curBitrate() {
+  const q = $('#quality').value, n = Math.max(1, peers.size);
+  return ({ fast: 5_000_000, high: 4_000_000, medium: 1_800_000, low: 600_000 })[q] || Math.min(4_000_000, Math.max(400_000, 25_000_000 / n));
+}
+
 function closePeer(id) { const pc = peers.get(id); if (pc) { pc.close(); peers.delete(id); } }
 
 function applyQuality() {
   const q = $('#quality').value, n = Math.max(1, peers.size);
   let p;
-  if (q === 'high') p = { maxBitrate: 4_000_000, maxFramerate: 30, scale: 1 };
+  if (q === 'fast') p = { maxBitrate: 5_000_000, maxFramerate: 60, scale: 1, smooth: true };
+  else if (q === 'high') p = { maxBitrate: 4_000_000, maxFramerate: 30, scale: 1 };
   else if (q === 'medium') p = { maxBitrate: 1_800_000, maxFramerate: 20, scale: 1 };
   else if (q === 'low') p = { maxBitrate: 600_000, maxFramerate: 10, scale: 1.5 };
   else { // otomatis: bagi anggaran ~25 Mbps ke semua penonton
@@ -72,11 +87,20 @@ function applyQuality() {
     prm.encodings[0].maxBitrate = p.maxBitrate;
     prm.encodings[0].maxFramerate = p.maxFramerate;
     prm.encodings[0].scaleResolutionDownBy = p.scale;
-    prm.degradationPreference = 'maintain-resolution'; // teks presentasi tetap tajam
+    // Responsif: jaga kelancaran gerak. Lainnya: jaga ketajaman teks presentasi.
+    prm.degradationPreference = p.smooth ? 'maintain-framerate' : 'maintain-resolution';
     s.setParameters(prm).catch(() => {});
   }));
 }
-$('#quality').onchange = applyQuality;
+$('#quality').onchange = () => {
+  applyQuality();
+  const vt = stream && stream.getVideoTracks()[0];
+  if (vt) {
+    const fast = $('#quality').value === 'fast';
+    vt.contentHint = fast ? 'motion' : 'detail';
+    vt.applyConstraints({ frameRate: fast ? 60 : 30 }).catch(() => {});
+  }
+};
 
 // ---------- Pilih sumber ----------
 let srcCache = [], tab = 'screen';
@@ -109,13 +133,22 @@ async function start(id) {
   await window.cast.choose(id, $('#chkAudio').checked);
   const old = stream;
   try {
-    stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: $('#chkAudio').checked });
+    const fps = $('#quality').value === 'fast' ? 60 : 30;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: fps }, audio: $('#chkAudio').checked });
+    } catch (e1) {
+      // Suara sistem tidak didukung di perangkat ini: coba lagi tanpa suara
+      if (!$('#chkAudio').checked) throw e1;
+      await window.cast.choose(id, false);
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: fps }, audio: false });
+      alertBox('Suara sistem tidak bisa ditangkap di perangkat ini, jadi hanya gambar yang dibagikan.');
+    }
   } catch (e) {
     alertBox('Gagal mengambil layar. Di Mac, izinkan "Screen Recording" untuk OutsiderCast di System Settings → Privacy & Security, lalu buka ulang aplikasi.');
     stream = old; return;
   }
   const vt = stream.getVideoTracks()[0];
-  vt.contentHint = 'detail';
+  vt.contentHint = $('#quality').value === 'fast' ? 'motion' : 'detail';
   vt.onended = stop;
   if (old) old.getTracks().forEach(t => t.stop());
   $('#preview').srcObject = stream;
