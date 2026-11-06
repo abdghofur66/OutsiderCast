@@ -46,4 +46,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
-        run: gh release upload "$TAG" dist/*.exe dist/*.dmg --clobber -R ${{ github.repository }} 2>/dev/null || gh release upload "$TAG" $(ls dist/*.exe dist/*.dmg 2>/dev/null) --clobber -R ${{ github.repository }}
+        run: |
+          shopt -s nullglob
+          for f in dist/*.exe dist/*.dmg; do gh release upload "$TAG" "$f" --clobber -R ${{ github.repository }}; done
