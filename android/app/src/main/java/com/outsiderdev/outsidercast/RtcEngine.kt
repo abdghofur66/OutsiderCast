@@ -14,7 +14,7 @@ class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () 
     private val factory: PeerConnectionFactory
     private val capturer: ScreenCapturerAndroid
     private val helper: SurfaceTextureHelper
-    private val source: VideoSource
+    private lateinit var source: VideoSource
     val track: VideoTrack
     private val peers = ConcurrentHashMap<Int, PeerConnection>()
 
