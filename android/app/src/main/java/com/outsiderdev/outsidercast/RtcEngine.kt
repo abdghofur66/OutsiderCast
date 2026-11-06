@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 class RtcEngine(private val ctx: Context, projectionData: Intent, onStopped: () -> Unit) {
     private val egl = EglBase.create()
     private val factory: PeerConnectionFactory
-    private val capturer: ScreenCapturerAndroid
+    private lateinit var capturer: ScreenCapturerAndroid
     private val helper: SurfaceTextureHelper
     private lateinit var source: VideoSource
     val track: VideoTrack
