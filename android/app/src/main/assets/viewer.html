@@ -4,8 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f172a">
+<link rel="icon" type="image/png" href="/icon.png">
+<link rel="apple-touch-icon" href="/icon.png">
 <title>OutsiderCast — Tonton layar</title>
 <style>
+.logo{width:28px;height:28px;border-radius:6px;vertical-align:middle;margin-right:8px}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 #join{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
@@ -39,7 +42,7 @@ footer img{width:18px;height:18px}
 <body>
 <div id="join">
   <div class="box">
-    <h1>Outsider<span>Cast</span></h1>
+    <h1><img class="logo" src="/icon.png" alt="" onerror="this.remove()">Outsider<span>Cast</span></h1>
     <p>Tonton layar HP yang sedang dibagikan di jaringan ini.</p>
     <label for="name">Nama</label>
     <input id="name" maxlength="40" placeholder="Nama Anda">
@@ -49,7 +52,7 @@ footer img{width:18px;height:18px}
   </div>
   <footer>
     <span class="dev">Developed by</span>
-    <a href="https://outsiderdev.com" target="_blank" rel="noopener"><img src="https://outsiderdev.com/img/ico.png" alt=""> <b>OutsiderDev</b></a>
+    <a href="https://outsiderdev.com" target="_blank" rel="noopener"><img src="/icon.png" alt="" onerror="this.src='https://outsiderdev.com/img/ico.png'"> <b>OutsiderDev</b></a>
   </footer>
 </div>
 

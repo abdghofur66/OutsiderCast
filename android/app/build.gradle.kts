@@ -11,8 +11,8 @@ android {
         applicationId = "com.outsiderdev.outsidercast"
         minSdk = 24
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.5.0"
+        versionCode = 13
+        versionName = "1.6.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 

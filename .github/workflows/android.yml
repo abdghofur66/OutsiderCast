@@ -37,6 +37,8 @@ jobs:
             curl -sL https://outsiderdev.com/img/ico.png -o raw.png
             cp raw.png app/src/main/res/drawable-nodpi/ic_launcher.png
           fi
+      - name: Salin ikon untuk halaman penonton (favicon & logo)
+        run: mkdir -p app/src/main/assets && cp app/src/main/res/drawable-nodpi/ic_launcher.png app/src/main/assets/icon.png
       - run: gradle assembleRelease --no-daemon
       - name: Beri nama sesuai versi
         run: |

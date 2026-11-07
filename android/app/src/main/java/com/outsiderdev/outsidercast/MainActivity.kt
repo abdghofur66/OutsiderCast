@@ -67,6 +67,8 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(20), dp(16), dp(16)) }
 
         val head = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        head.addView(ImageView(this).apply { setImageResource(R.drawable.ic_launcher) },
+            LinearLayout.LayoutParams(dp(30), dp(30)).apply { setMargins(0, 0, dp(10), 0) })
         head.addView(text("OutsiderCast", 22f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
         status = text("Belum berbagi", 13f, MUTED).apply { setPadding(dp(12), dp(5), dp(12), dp(5)); background = round(Color.parseColor("#1E293B"), 99) }
         head.addView(status)

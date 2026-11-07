@@ -61,6 +61,9 @@ class HttpServer(private val ctx: Context) {
                 val out = c.getOutputStream()
                 when {
                     path == "/" || path == "/index.html" -> send(out, 200, "text/html; charset=utf-8", ctx.assets.open("viewer.html").readBytes())
+                    path == "/icon.png" || path == "/favicon.ico" -> try {
+                        send(out, 200, "image/png", ctx.assets.open("icon.png").readBytes())
+                    } catch (_: Exception) { send(out, 404, "text/plain", "Tidak ditemukan".toByteArray()) }
                     path == "/status" -> send(out, 200, "application/json",
                         """{"live":${Cast.live},"paused":${Cast.paused},"pin":${Cast.pin.isNotEmpty()}}""".toByteArray())
                     path == "/auth" -> if (pinOk(q["pin"])) send(out, 200, "text/plain", "ok".toByteArray())

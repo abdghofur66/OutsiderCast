@@ -31,6 +31,9 @@ jobs:
             curl -sL https://outsiderdev.com/img/ico.png -o build/ico-src.png
             npx --yes sharp-cli -i build/ico-src.png -o build/icon.png resize 512 512 --fit contain --background "#00000000"
           fi
+      - name: Salin ikon ke halaman web (favicon & logo)
+        shell: bash
+        run: cp build/icon.png viewer/icon.png && cp build/icon.png host/icon.png
       - run: npm install
       - run: npx electron-builder --publish never
         env:
