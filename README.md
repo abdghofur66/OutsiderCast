@@ -5,14 +5,14 @@ Pemateri menjalankan aplikasi di Windows/Mac, lalu penonton cukup scan QR atau b
 
 ## Fitur
 - Bagikan seluruh layar, satu monitor, atau satu jendela (bisa ganti saat berjalan)
-- Suara sistem ikut terkirim (khusus Windows)
+- Suara sistem ikut terkirim (Windows, serta Mac dengan macOS 13 Ventura ke atas)
 - Banyak penonton sekaligus, dengan kualitas otomatis menyesuaikan jumlah penonton
 - Jeda layar, PIN ruang opsional, daftar penonton, dan tombol keluarkan penonton
 - Penonton bisa layar penuh, zoom (tombol/roda mouse/cubit), dan geser
 - WebRTC langsung di jaringan lokal, tanpa server luar
 
 ## Android (berbagi layar HP)
-Instal `OutsiderCast-Android-*.apk` dari Release, ketuk **Mulai berbagi**, lalu izinkan rekam layar. Penonton scan QR dari browser, cukup satu Wi-Fi atau tersambung ke hotspot HP itu. Video dikirim lewat WebRTC dengan encoder hardware (sampai 1080p/30 fps), dan bisa ditonton di browser apa pun termasuk iPhone. Suara belum ikut terkirim. Kode ada di folder `android/`.
+Instal `OutsiderCast-Android-*.apk` dari Release, ketuk **Mulai berbagi**, lalu izinkan rekam layar. Penonton scan QR dari browser, cukup satu Wi-Fi atau tersambung ke hotspot HP itu. Video dikirim lewat WebRTC dengan encoder hardware (sampai 1080p/30 fps, atau 60 fps di mode Responsif), dan bisa ditonton di browser apa pun termasuk iPhone. Suara HP (YouTube, video, musik) bisa ikut terkirim di Android 10 ke atas: centang **Kirim suara HP** sebelum mulai berbagi. APK bisa dipasang di Android 7 ke atas. Kode ada di folder `android/`.
 
 ## Menjalankan dari kode
 ```bash
